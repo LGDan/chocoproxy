@@ -1,0 +1,6 @@
+ChocoProxy/bin/Debug/**
+ChocoProxy/obj/Debug/**
+ChocoProxy/obj/project.assets.json
+ChocoProxy/obj/ChocoProxy.vbproj.*
+.vs/
+.vs/**
