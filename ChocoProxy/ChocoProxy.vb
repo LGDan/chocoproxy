@@ -13,6 +13,13 @@ Public Class ChocoProxy
     Dim associatedWebServer As WebServer
     Dim stringReplacements As New Hashtable
 
+    ''' <summary>
+    ''' Create a new instance of ChocoProxy's main proxing subsystem.
+    ''' </summary>
+    ''' <param name="ws">The web server instance to be serviced by this proxy.</param>
+    ''' <param name="cacheTime">How long to keep objects in the cache for. Default is 24 Hours.</param>
+    ''' <param name="pkgCacheLocation">Where to keep downloaded .nupkg files.</param>
+    ''' <param name="objectCacheLocation">Where to keep cached API data. This is only used if the option to cache to disk is provided.</param>
     Sub New(ws As WebServer, cacheTime As TimeSpan, pkgCacheLocation As String, objectCacheLocation As String)
         Me.pkgCacheLocation = pkgCacheLocation
         Me.objCacheLocation = objCacheLocation
@@ -23,6 +30,10 @@ Public Class ChocoProxy
         pkgDownloadThread.Start()
     End Sub
 
+    ''' <summary>
+    ''' Add all the potential API calls for Chocolatey as routes to the web server router.
+    ''' </summary>
+    ''' <param name="ws">The web server instance to be serviced by this proxy.</param>
     Sub ConfigureRoutes(ws As WebServer)
         ws.AddRoute("\/api\/v2\/Packages\(\)", Sub(c)
                                                    PassthroughReplace(c, stringReplacements)
@@ -50,6 +61,10 @@ Public Class ChocoProxy
 
 
 #Region "Package Delivery"
+    ''' <summary>
+    ''' The package director tells Chocolatey where to look to download the .nupkg it's looking for.
+    ''' </summary>
+    ''' <param name="c">httpListenerContext that needs directing.</param>
     Sub PackageDirector(c As HttpListenerContext)
         Dim packageUrlRegex As New Text.RegularExpressions.Regex("^\/api\/v2\/package\/(.+)\/(.+)$")
         Dim m As Match = packageUrlRegex.Match(c.Request.Url.LocalPath)
@@ -60,6 +75,10 @@ Public Class ChocoProxy
         Package302Found(c, newLocation)
     End Sub
 
+    ''' <summary>
+    ''' The package provider actually sends the .nupkg file to the client, either from the cache or direct from Chocolatey, caching it in the process.
+    ''' </summary>
+    ''' <param name="c">httpListenerContext that needs to download the package.</param>
     Sub PackageProvider(c As HttpListenerContext)
         Dim pkgName As String = c.Request.Url.Segments().Last()
         If IO.File.Exists(pkgCacheLocation & "/" & pkgName) Then
@@ -71,6 +90,11 @@ Public Class ChocoProxy
         End If
     End Sub
 
+    ''' <summary>
+    ''' Easy wrapper to deliver a file on disk to a client.
+    ''' </summary>
+    ''' <param name="ctx">httpListenerContext that needs to download the file.</param>
+    ''' <param name="filePath">Full filesystem path to file to send.</param>
     Sub WriteFile(ctx As HttpListenerContext, filePath As String)
         Dim response = ctx.Response
         Using fs As FileStream = File.OpenRead(filePath)
@@ -98,11 +122,24 @@ Public Class ChocoProxy
         End Using
     End Sub
 
+    ''' <summary>
+    ''' Nasty hack of a function to assign a value to a variable, and return that assigned value at the same time.
+    ''' VB.Net won't let you do it natively, but C# does.
+    ''' </summary>
+    ''' <typeparam name="T"></typeparam>
+    ''' <param name="target"></param>
+    ''' <param name="value"></param>
+    ''' <returns></returns>
     Shared Function InlineAssignHelper(Of T)(ByRef target As T, value As T) As T
         target = value
         Return value
     End Function
 
+    ''' <summary>
+    ''' Returns a HTTP protocol level redirect to the client.
+    ''' </summary>
+    ''' <param name="c"></param>
+    ''' <param name="NewLocation"></param>
     Sub Package302Found(c As HttpListenerContext, NewLocation As String)
         c.Response.StatusCode = 302
         c.Response.StatusDescription = "Found"
@@ -114,6 +151,10 @@ Public Class ChocoProxy
 #End Region
 
 #Region "API Access"
+    ''' <summary>
+    ''' Proxies a request to the Chocolatey API, and caches the response.
+    ''' </summary>
+    ''' <param name="c">httpListenerContext that needs a response.</param>
     Sub Passthrough(c As HttpListenerContext)
         Using sw As New IO.StreamWriter(c.Response.OutputStream)
             c.Response.ContentType = "application/xml;charset=utf-8"
@@ -121,6 +162,12 @@ Public Class ChocoProxy
             sw.Write(responseBody)
         End Using
     End Sub
+
+    ''' <summary>
+    ''' Proxies a request to the Chocolatey API, caches the response, but replaces all instances of provided strings with something else. Good for swapping URLs.
+    ''' </summary>
+    ''' <param name="c">httpListenerContext that needs a response.</param>
+    ''' <param name="replaceTable">Hashtable containg values to replace as the key, and what to replace with as the value.</param>
     Sub PassthroughReplace(c As HttpListenerContext, replaceTable As Hashtable)
         Using sw As New IO.StreamWriter(c.Response.OutputStream)
             c.Response.ContentType = "application/xml;charset=utf-8"
@@ -131,12 +178,24 @@ Public Class ChocoProxy
             sw.Write(responseBody)
         End Using
     End Sub
+
+    ''' <summary>
+    ''' Gets a resource from the Chocolatey API, and caches the response.
+    ''' </summary>
+    ''' <param name="path"></param>
+    ''' <returns></returns>
     Function ChocoAPICacheGet(path) As String
         If Not memCache.SimpleCheckCache(path) Then
             memCache.AddToSimpleCache(path, ChocoAPIGet(path))
         End If
         Return memCache.GetFromSimpleCache(path)
     End Function
+
+    ''' <summary>
+    ''' Gets package metadata from the Chocolatey API, caches the response, and deserialises it to a .NET Object for easy access.
+    ''' </summary>
+    ''' <param name="packageName">Name of Chocolatey package to get metadata for.</param>
+    ''' <returns></returns>
     Public Function OfficialPackageMetadataGet(packageName As String) As Packages.feed
         If Not memCache.SimpleCheckCache("packagemeta." & packageName) Then
             Dim rawXML As String = ChocoAPICacheGet("/api/v2/Packages()?$filter=(tolower(Id)%20eq%20'" & packageName & "')%20and%20IsLatestVersion")
@@ -144,12 +203,15 @@ Public Class ChocoProxy
         End If
         Return memCache.GetFromSimpleCache("packagemeta." & packageName)
     End Function
-    Function OfficialPackageVersionGet(packageName As String) As String
-        Return OfficialPackageMetadataGet(packageName).entry.properties.Version
-    End Function
+
 #End Region
 
 #Region "Official Site Interactions"
+    ''' <summary>
+    ''' Get a resource from the Chocolatey API.
+    ''' </summary>
+    ''' <param name="path"></param>
+    ''' <returns></returns>
     Function ChocoAPIGet(path) As String
         LogText("Getting " & path)
         Try
@@ -166,6 +228,10 @@ Public Class ChocoProxy
             LogText("ERR: " & ex.ToString() & " ## path = " & path)
         End Try
     End Function
+
+    ''' <summary>
+    ''' A Thread subroutine to monitor the download queue and download packages to the cache.
+    ''' </summary>
     Sub PackageDownloader()
         Dim downloader As New WebClient
         Do
@@ -184,6 +250,13 @@ Public Class ChocoProxy
             End If
         Loop
     End Sub
+
+    ''' <summary>
+    ''' Proxies a large file download.
+    ''' </summary>
+    ''' <param name="c"></param>
+    ''' <param name="url"></param>
+    ''' <param name="pkgName"></param>
     Sub WriteProxy(c As HttpListenerContext, url As String, pkgName As String)
         LogText("Proxying direct from chocolatey: " & pkgName & " to client " & c.Request.RemoteEndPoint.ToString)
         Dim response = c.Response
@@ -216,9 +289,7 @@ Public Class ChocoProxy
             response.OutputStream.Close()
         End Using
     End Sub
-    Function OfficialPackageDownloadUrlBuilder(packageName As String, packageVersion As String)
-        Return "https://packages.chocolatey.org/" & packageName & "." & packageVersion & ".nupkg"
-    End Function
+
 #End Region
 
 End Class

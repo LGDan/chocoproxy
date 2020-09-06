@@ -9,6 +9,11 @@ Module Program
     Dim a As API
     Dim ccl As ConsoleCommandLine
 
+
+    ''' <summary>
+    ''' Initialise all components and start the server.
+    ''' </summary>
+    ''' <param name="args">Not Implemented (yet)</param>
     Sub Main(args As String())
         LoadSettings()
         Logo()
@@ -22,6 +27,10 @@ Module Program
         ws.StartServer()
     End Sub
 
+    ''' <summary>
+    ''' Main logging function. Prefixes log lines with date and the name of the calling method for easier tracing/debugging.
+    ''' </summary>
+    ''' <param name="text">Message to log.</param>
     Sub LogText(text As String)
         If MainSettings.ConsoleLogging Then
             Dim st As New StackTrace
@@ -32,6 +41,9 @@ Module Program
         End If
     End Sub
 
+    ''' <summary>
+    ''' Display the ASCII logo to the console.
+    ''' </summary>
     Sub Logo()
         If Not MainSettings.ConsoleLogging Then Exit Sub
         Console.ForegroundColor = ConsoleColor.DarkBlue
@@ -51,6 +63,9 @@ Module Program
         Console.WriteLine()
     End Sub
 
+    ''' <summary>
+    ''' Output the current application settings to a table in the console.
+    ''' </summary>
     Sub DisplaySettings()
         If Not MainSettings.DisplaySettings Then Exit Sub
         Dim maxSettingWidth As Integer = 7
@@ -80,6 +95,9 @@ Module Program
         Console.WriteLine()
     End Sub
 
+    ''' <summary>
+    ''' Load application settings from config.xml, and create it with defaults if it does not exist.
+    ''' </summary>
     Sub LoadSettings()
         Dim x As New Xml.Serialization.XmlSerializer(GetType(Settings))
         If Not IO.File.Exists("config.xml") Then
