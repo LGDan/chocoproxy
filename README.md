@@ -38,4 +38,4 @@ As this is pretty early in development, I haven't yet got a build/release pipeli
 Currently it's only set to listen on localhost, you can change this but it may require you running it as admin for lower port numbers, or creating firewall exceptions.
 
 ## Screenshots
-![Command Line Screenshot](https://imgur.com/a/Gdl2B1H)
+![Command Line Screenshot](https://i.imgur.com/jO6szD6.png)
