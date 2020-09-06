@@ -5,14 +5,18 @@ Imports System.Xml.Serialization
 
 Public Class ChocoProxy
 
-    Dim memCache As New ChocoCache(TimeSpan.FromHours(24))
-    Dim pkgCacheLocation As String = Directory.GetCurrentDirectory() & "/cache/pkg"
+    Dim memCache As ChocoCache
+    Public pkgCacheLocation As String
+    Public objCacheLocation As String
     Dim pkgDownloadQueue As New Queue(Of String)
     Dim pkgDownloadThread As New Threading.Thread(AddressOf PackageDownloader)
     Dim associatedWebServer As WebServer
     Dim stringReplacements As New Hashtable
 
-    Sub New(ws As WebServer)
+    Sub New(ws As WebServer, cacheTime As TimeSpan, pkgCacheLocation As String, objectCacheLocation As String)
+        Me.pkgCacheLocation = pkgCacheLocation
+        Me.objCacheLocation = objCacheLocation
+        memCache = New ChocoCache(Me, cacheTime)
         stringReplacements.Add("https://chocolatey.org/api/v2", ws.baseUrl & "api/v2")
         ConfigureRoutes(ws)
         associatedWebServer = ws

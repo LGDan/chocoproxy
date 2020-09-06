@@ -6,12 +6,15 @@ Public Class ChocoCache
     Private _cache As New Hashtable
     Private _onDisk As Boolean
     Private _objectExpiry As TimeSpan
-    Dim objCacheLocation As String = Directory.GetCurrentDirectory() & "/cache/obj"
+    Private _parentProxy As ChocoProxy
+    Dim objCacheLocation As String
     Dim hashProvider As Security.Cryptography.SHA256 = Security.Cryptography.SHA256.Create()
 
-    Sub New(Expiry As TimeSpan, Optional onDisk As Boolean = False)
+    Sub New(parentProxy As ChocoProxy, expiry As TimeSpan, Optional onDisk As Boolean = False)
         _onDisk = onDisk
-        _objectExpiry = Expiry
+        _objectExpiry = expiry
+        _parentProxy = parentProxy
+        objCacheLocation = parentProxy.objCacheLocation
         If onDisk Then
             If Not IO.Directory.Exists(objCacheLocation) Then
                 IO.Directory.CreateDirectory(objCacheLocation)

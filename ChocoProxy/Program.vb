@@ -3,46 +3,37 @@ Imports System.IO
 
 Module Program
 
-    Dim logExclude As New List(Of String)
+    Dim MainSettings As Settings
     Dim ws As WebServer
     Dim cp As ChocoProxy
     Dim a As API
     Dim ccl As ConsoleCommandLine
 
-    Dim baseurl As String
-    Dim globalSettings As New Hashtable
-
     Sub Main(args As String())
-        Logo()
         LoadSettings()
+        Logo()
         DisplaySettings()
-        'logExclude.AddRange({"GetFromSimpleCache", "SimpleCheckCache", "AddToSimpleCache", "PackageDirector", "ConfigureRoutes"})
-        baseurl = "http://localhost:44111/"
-        ws = New WebServer(baseurl)
-        cp = New ChocoProxy(ws)
+
+        ws = New WebServer(MainSettings.BaseURL)
+        cp = New ChocoProxy(ws, MainSettings.CacheTime, MainSettings.PackageCacheLocation, MainSettings.ObjectCacheLocation)
         a = New API(ws, cp)
         ccl = New ConsoleCommandLine(a)
 
         ws.StartServer()
-        'Do
-        '    Console.Write("ChocoProxy > ")
-        '    Console.WriteLine(MenuHandler(Console.ReadLine()))
-        'Loop
     End Sub
 
     Sub LogText(text As String)
-        If globalSettings("ConsoleLogging") Then
+        If MainSettings.ConsoleLogging Then
             Dim st As New StackTrace
             Dim callerName As String = st.GetFrame(1).GetMethod().Name
-            If Not logExclude.Contains(callerName) Then
+            If Not MainSettings.ExcludeFromLog.Contains(callerName) Then
                 Console.WriteLine(Format(Now(), "[HH:mm:ss] ") & "[" & callerName & "] " & text)
             End If
         End If
     End Sub
 
-
-
     Sub Logo()
+        If Not MainSettings.ConsoleLogging Then Exit Sub
         Console.ForegroundColor = ConsoleColor.DarkBlue
         Console.BackgroundColor = ConsoleColor.Cyan
         Console.WriteLine(" |                      | ")
@@ -61,11 +52,12 @@ Module Program
     End Sub
 
     Sub DisplaySettings()
+        If Not MainSettings.DisplaySettings Then Exit Sub
         Dim maxSettingWidth As Integer = 7
         Dim maxValueWidth As Integer = 5
-        For Each kv As DictionaryEntry In globalSettings
-            If kv.Key.ToString().Length > maxSettingWidth Then maxSettingWidth = kv.Key.ToString().Length
-            If kv.Value.ToString().Length > maxValueWidth Then maxValueWidth = kv.Value.ToString().Length
+        For Each f In GetType(Settings).GetFields()
+            If f.Name.Length > maxSettingWidth Then maxSettingWidth = f.Name.Length
+            If f.GetValue(MainSettings).ToString.Length > maxValueWidth Then maxValueWidth = f.GetValue(MainSettings).ToString.Length
         Next
         maxSettingWidth += 1
         maxValueWidth += 1
@@ -78,8 +70,8 @@ Module Program
             Console.Write("-")
         Next
         Console.WriteLine()
-        For Each kv As DictionaryEntry In globalSettings
-            Console.WriteLine(kv.Key.ToString().PadRight(maxSettingWidth) & ":" & kv.Value.ToString().PadRight(maxValueWidth) & "|")
+        For Each f In GetType(Settings).GetFields()
+            Console.WriteLine(f.Name.PadRight(maxSettingWidth) & ":" & f.GetValue(MainSettings).ToString().PadRight(maxValueWidth) & "|")
         Next
         For i As Integer = 1 To (maxSettingWidth + 1 + maxValueWidth + 1)
             Console.Write("-")
@@ -89,13 +81,15 @@ Module Program
     End Sub
 
     Sub LoadSettings()
-        If IO.File.Exists("chocoproxy.cfg") Then
-
-        Else
-            globalSettings.Add("LogExclude", "")
-            globalSettings.Add("BaseURL", "http://localhost:44111/")
-            globalSettings.Add("ConsoleLogging", True)
+        Dim x As New Xml.Serialization.XmlSerializer(GetType(Settings))
+        If Not IO.File.Exists("config.xml") Then
+            Using f As New FileStream("config.xml", FileMode.Create)
+                x.Serialize(f, New Settings)
+            End Using
         End If
+        Using f As New FileStream("config.xml", FileMode.Open)
+            MainSettings = x.Deserialize(f)
+        End Using
     End Sub
 
 End Module
